@@ -357,6 +357,19 @@ def already_used_page(name):
 def health():
     return {'status': 'ok', 'service': 'Girnar Darshan Automation'}
 
+@app.route('/register-token', methods=['POST'])
+def register_token():
+    secret = request.headers.get('X-Register-Secret', '')
+    if secret != os.getenv('REGISTER_SECRET', 'girnar2026'):
+        return 'Unauthorized', 401
+    data = request.get_json()
+    if not data or 'token' not in data:
+        return 'Bad Request', 400
+    pending = get_pending()
+    pending[data['token']] = data['entry']
+    save_pending(pending)
+    return {'ok': True}, 200
+
 @app.route('/webhook/shopify', methods=['POST'])
 def shopify_webhook():
     raw_body    = request.get_data()

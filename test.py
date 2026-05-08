@@ -14,23 +14,9 @@ load_dotenv()
 
 STORE         = 'girnardarshan-com.myshopify.com'
 PRODUCT_TITLE = 'Embroidered Girnar Kerchief | French Work Note | White & Gold'
-PENDING_FILE  = 'pending.json'
 SERVER_URL    = os.getenv('SERVER_URL', 'http://localhost:3000')
 
 gemini = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-
-def get_pending():
-    if not os.path.exists(PENDING_FILE):
-        return {}
-    try:
-        with open(PENDING_FILE) as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-def save_pending(data):
-    with open(PENDING_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
 
 def fetch_product():
     res = requests.get(
@@ -266,10 +252,9 @@ def main():
     post_content = generate_facebook_post(product)
     print(f'\n--- Generated Post ---\n{post_content}\n----------------------\n')
 
-    # 3. Save token
-    token   = str(uuid.uuid4())
-    pending = get_pending()
-    pending[token] = {
+    # 3. Register token with Railway server
+    token = str(uuid.uuid4())
+    entry = {
         'product': {
             'title':  product['title'],
             'handle': product.get('handle', ''),
@@ -281,7 +266,13 @@ def main():
         'expires_at':   time.time() + 48 * 3600,
         'used':         False,
     }
-    save_pending(pending)
+    reg = requests.post(
+        f"{SERVER_URL}/register-token",
+        json={'token': token, 'entry': entry},
+        headers={'X-Register-Secret': 'girnar2026'},
+    )
+    if reg.status_code != 200:
+        raise Exception(f"Failed to register token with server: {reg.status_code} {reg.text[:200]}")
 
     # 4. Send email
     print('📧 Sending AMP approval email to aishwarya@valuecart.in...')
