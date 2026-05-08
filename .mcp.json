@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "valuecart-email": {
+      "url": "https://valuecart-email-mcp-production.up.railway.app/mcp/valuecart2026"
+    }
+  }
+}

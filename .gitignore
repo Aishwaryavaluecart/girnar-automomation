@@ -1,0 +1,4 @@
+.env
+pending.json
+__pycache__/
+*.pyc
