@@ -158,6 +158,13 @@ def build_amp_email(title, price_str, image_url, post_content, token):
 
         <button class="btn" type="submit">✅ &nbsp;Approve &amp; Post to Facebook</button>
       </form>
+
+      <div style="text-align:center;margin-top:16px;">
+        <a href="{SERVER_URL}/disapprove?token={token}"
+           style="display:inline-block;color:#e74c3c;font-size:14px;font-weight:600;text-decoration:none;padding:10px 32px;border:2px solid #e74c3c;border-radius:50px;">
+          ❌ Disapprove
+        </a>
+      </div>
     </div>
 
     <div class="footer">
@@ -168,7 +175,8 @@ def build_amp_email(title, price_str, image_url, post_content, token):
 </html>'''
 
 def build_fallback_html(title, price_str, image_url, post_content, token):
-    approve_url = f"{SERVER_URL}/approve?token={token}"
+    approve_url    = f"{SERVER_URL}/approve?token={token}"
+    disapprove_url = f"{SERVER_URL}/disapprove?token={token}"
     safe_post   = post_content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     image_block = f'<tr><td style="padding:0;line-height:0;"><img src="{image_url}" width="600" style="display:block;width:100%;max-height:320px;object-fit:cover;" /></td></tr>' if image_url else ''
     price_block = f'<p style="margin:0 0 4px;font-size:20px;color:#1877f2;font-weight:700;">{price_str}</p>' if price_str else ''
@@ -195,8 +203,11 @@ def build_fallback_html(title, price_str, image_url, post_content, token):
             <p style="margin:0;color:#1c1e21;line-height:1.8;font-size:15px;white-space:pre-wrap;">{safe_post}</p>
           </div>
         </td></tr>
-        <tr><td style="padding:0 40px 32px;text-align:center;">
+        <tr><td style="padding:0 40px 16px;text-align:center;">
           <a href="{approve_url}" style="display:inline-block;background:linear-gradient(135deg,#42b72a,#2d9e1a);color:#fff;text-decoration:none;padding:18px 56px;border-radius:50px;font-size:18px;font-weight:700;">✅ &nbsp;Approve &amp; Post to Facebook</a>
+        </td></tr>
+        <tr><td style="padding:0 40px 32px;text-align:center;">
+          <a href="{disapprove_url}" style="display:inline-block;background:#fff;color:#e74c3c;text-decoration:none;padding:12px 40px;border-radius:50px;font-size:15px;font-weight:600;border:2px solid #e74c3c;">❌ &nbsp;Disapprove</a>
         </td></tr>
         <tr><td style="background:#f8f9fa;padding:20px 40px;text-align:center;border-top:1px solid #e8ecef;">
           <p style="margin:0;color:#bbb;font-size:12px;">Girnar Darshan Automation &nbsp;•&nbsp; Powered by Gemini AI</p>

@@ -89,7 +89,8 @@ Write only the post text, nothing else."""
 # --- Email via SendGrid (AMP + HTML fallback) ---
 
 def build_amp_email(title, price_str, image_url, post_content, token):
-    approve_url = f"{SERVER_URL}/approve-amp"
+    approve_url    = f"{SERVER_URL}/approve-amp"
+    disapprove_url = f"{SERVER_URL}/disapprove?token={token}"
     safe_post = post_content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
     image_block = ''
@@ -179,6 +180,13 @@ def build_amp_email(title, price_str, image_url, post_content, token):
 
         <button class="btn" type="submit">✅ &nbsp;Approve &amp; Post to Facebook</button>
       </form>
+
+      <div style="text-align:center;margin-top:16px;">
+        <a href="{disapprove_url}"
+           style="display:inline-block;color:#e74c3c;font-size:14px;font-weight:600;text-decoration:none;padding:10px 32px;border:2px solid #e74c3c;border-radius:50px;">
+          ❌ Disapprove
+        </a>
+      </div>
     </div>
 
     <div class="footer">
@@ -189,7 +197,8 @@ def build_amp_email(title, price_str, image_url, post_content, token):
 </html>'''
 
 def build_fallback_html(title, price_str, image_url, post_content, token):
-    approve_url = f"{SERVER_URL}/approve?token={token}"
+    approve_url    = f"{SERVER_URL}/approve?token={token}"
+    disapprove_url = f"{SERVER_URL}/disapprove?token={token}"
     safe_post = post_content.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
     image_block = f'<tr><td style="padding:0;line-height:0;"><img src="{image_url}" width="600" style="display:block;width:100%;max-height:320px;object-fit:cover;" /></td></tr>' if image_url else ''
     price_block = f'<p style="margin:0 0 4px;font-size:20px;color:#1877f2;font-weight:700;">{price_str}</p>' if price_str else ''
@@ -216,8 +225,11 @@ def build_fallback_html(title, price_str, image_url, post_content, token):
             <p style="margin:0;color:#1c1e21;line-height:1.8;font-size:15px;white-space:pre-wrap;">{safe_post}</p>
           </div>
         </td></tr>
-        <tr><td style="padding:0 40px 32px;text-align:center;">
+        <tr><td style="padding:0 40px 16px;text-align:center;">
           <a href="{approve_url}" style="display:inline-block;background:linear-gradient(135deg,#42b72a,#2d9e1a);color:#fff;text-decoration:none;padding:18px 56px;border-radius:50px;font-size:18px;font-weight:700;">✅ &nbsp;Approve &amp; Post to Facebook</a>
+        </td></tr>
+        <tr><td style="padding:0 40px 32px;text-align:center;">
+          <a href="{disapprove_url}" style="display:inline-block;background:#fff;color:#e74c3c;text-decoration:none;padding:12px 40px;border-radius:50px;font-size:15px;font-weight:600;border:2px solid #e74c3c;">❌ &nbsp;Disapprove</a>
         </td></tr>
         <tr><td style="background:#f8f9fa;padding:20px 40px;text-align:center;border-top:1px solid #e8ecef;">
           <p style="margin:0;color:#bbb;font-size:12px;">Girnar Darshan Automation &nbsp;•&nbsp; Powered by Gemini AI</p>
@@ -613,6 +625,64 @@ def approve():
     except Exception as e:
         print(f'Facebook error: {e}')
         return error_page(str(e)), 500
+
+@app.route('/disapprove')
+def disapprove():
+    token = request.args.get('token')
+    if not token:
+        return error_page('No token provided.'), 400
+
+    entry = decode_signed_token(token)
+    if not entry:
+        return error_page('Invalid or expired link.'), 404
+
+    title = entry['product']['title']
+    try:
+        _send_disapproval_notification(title)
+        print(f'❌ Disapproved: {title}')
+    except Exception as e:
+        print(f'Disapproval email error: {e}')
+
+    return f'''<!DOCTYPE html><html><head><meta charset="utf-8"><title>Disapproved</title>
+<style>*{{box-sizing:border-box}}body{{margin:0;font-family:'Segoe UI',sans-serif;background:#f0f4f8;display:flex;align-items:center;justify-content:center;min-height:100vh}}
+.card{{background:#fff;padding:60px 50px;border-radius:20px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.1);max-width:440px;width:90%}}</style></head>
+<body><div class="card"><div style="font-size:64px;margin-bottom:16px">❌</div>
+<h1 style="font-size:24px;font-weight:700;color:#1a1a2e;margin:0 0 12px">Post Disapproved</h1>
+<p style="color:#666;font-size:15px;margin:0"><strong>{title}</strong> was not posted. A notification has been sent.</p>
+</div></body></html>'''
+
+def _send_disapproval_notification(product_title):
+    payload = {
+        'personalizations': [{'to': [{'email': 'aishh.ajay0307@gmail.com', 'name': 'Ajay'}]}],
+        'from': {'email': 'aryan@valuecart.in', 'name': 'Girnar Darshan'},
+        'subject': f'Post Disapproved — {product_title}',
+        'content': [{'type': 'text/plain',
+                     'value': f'Hi,\n\nSonal Shah has disapproved the Facebook post for:\n\n{product_title}\n\nThe post was not published.\n\n— Girnar Darshan Automation'},
+                    {'type': 'text/html',
+                     'value': f'''<!DOCTYPE html><html><body style="font-family:'Segoe UI',sans-serif;background:#f0f4f8;padding:40px 20px;">
+<div style="max-width:500px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.1);">
+  <div style="background:#e74c3c;padding:28px 36px;text-align:center;">
+    <div style="font-size:40px;margin-bottom:8px;">❌</div>
+    <h1 style="margin:0;color:#fff;font-size:22px;">Post Disapproved</h1>
+  </div>
+  <div style="padding:32px 36px;">
+    <p style="margin:0 0 16px;font-size:15px;color:#333;">Hi,</p>
+    <p style="margin:0 0 16px;font-size:15px;color:#333;"><strong>Sonal Shah</strong> has disapproved the Facebook post for:</p>
+    <div style="background:#fff5f5;border-left:4px solid #e74c3c;border-radius:8px;padding:16px 20px;margin-bottom:20px;">
+      <p style="margin:0;font-size:16px;font-weight:700;color:#1a1a2e;">{product_title}</p>
+    </div>
+    <p style="margin:0;font-size:14px;color:#666;">The post was <strong>not published</strong> to Facebook.</p>
+  </div>
+  <div style="background:#f8f9fa;padding:16px 36px;text-align:center;border-top:1px solid #eee;">
+    <p style="margin:0;color:#bbb;font-size:12px;">Girnar Darshan Automation</p>
+  </div>
+</div>
+</body></html>'''}]
+    }
+    res = requests.post('https://api.sendgrid.com/v3/mail/send', json=payload,
+                        headers={'Authorization': f"Bearer {os.getenv('SENDGRID_API_KEY')}", 'Content-Type': 'application/json'})
+    if res.status_code not in (200, 202):
+        raise Exception(f"SendGrid {res.status_code}: {res.text[:200]}")
 
 if __name__ == '__main__':
     port = int(os.getenv('PORT', 3000))
