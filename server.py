@@ -336,16 +336,16 @@ def create_poster(title, price_str, image_url, post_content):
         return ImageFont.load_default()
 
     f_brand   = fnt('bold',     26)
-    f_title   = fnt('bold',     50)
-    f_price   = fnt('bold',     44)
-    f_benefit = fnt('regular',  28)
+    f_title   = fnt('bold',     52)
+    f_price   = fnt('bold',     46)
+    f_cta     = fnt('semibold', 30)
     f_url     = fnt('semibold', 22)
 
-    y = line_y + 20
+    y = line_y + 24
 
     # Brand line
     draw.text((W // 2, y), 'GIRNAR DARSHAN', font=f_brand, fill=GOLD, anchor='mt')
-    y += 40
+    y += 44
 
     # Title — wrap to 2 lines
     words, cur, title_lines = title.split(), '', []
@@ -361,26 +361,23 @@ def create_poster(title, price_str, image_url, post_content):
         title_lines.append(cur)
     for line in title_lines[:2]:
         draw.text((W // 2, y), line, font=f_title, fill=WHITE, anchor='mt')
-        y += 62
+        y += 64
 
-    y += 4
+    y += 8
 
     # Price
     if price_str:
         draw.text((W // 2, y), price_str, font=f_price, fill=GOLD, anchor='mt')
-        y += 58
+        y += 62
 
-    # 2 benefit lines from AI post (skip first hook line)
-    benefits = [l.strip() for l in post_content.split('\n')
-                if l.strip() and not l.strip().startswith('#')
-                and not l.strip().startswith('http') and len(l.strip()) > 15]
-    for bl in benefits[1:3]:
-        while draw.textlength('• ' + bl, font=f_benefit) > W - PAD * 2.5 and len(bl) > 3:
-            bl = bl[:-1]
-        if bl != bl:
-            bl += '…'
-        draw.text((W // 2, y), '• ' + bl, font=f_benefit, fill=SOFT, anchor='mt')
-        y += 42
+    # Shop Now CTA button
+    cta_text = '🛍  Shop Now'
+    cta_w = int(draw.textlength(cta_text, font=f_cta)) + 80
+    cta_h = 58
+    cta_x = (W - cta_w) // 2
+    cta_y = y
+    draw.rounded_rectangle([cta_x, cta_y, cta_x + cta_w, cta_y + cta_h], radius=29, fill=GOLD)
+    draw.text((W // 2, cta_y + cta_h // 2), cta_text, font=f_cta, fill=(12, 8, 35), anchor='mm')
 
     # URL footer
     draw.text((W // 2, H - 32), 'www.girnardarshan.com', font=f_url, fill=GOLD, anchor='mb')
