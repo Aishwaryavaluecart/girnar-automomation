@@ -258,6 +258,44 @@ def send_approval_email(product, post_content, token, image_url):
 # --- Poster ---
 
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+
+THEMES = [
+    {   # 1 — Navy & Gold (classic luxury)
+        'bg1': (12, 8, 35),   'bg2': (28, 18, 65),
+        'plate': (248, 246, 255),
+        'accent': (212, 175, 55),
+        'title': (255, 255, 255),
+        'btn_text': (12, 8, 35),
+    },
+    {   # 2 — Emerald & Champagne (nature, premium)
+        'bg1': (6, 38, 24),   'bg2': (12, 68, 42),
+        'plate': (240, 252, 245),
+        'accent': (230, 210, 160),
+        'title': (255, 255, 255),
+        'btn_text': (6, 38, 24),
+    },
+    {   # 3 — Burgundy & Rose Gold (festive, gifting)
+        'bg1': (48, 8, 22),   'bg2': (85, 18, 42),
+        'plate': (255, 245, 248),
+        'accent': (210, 155, 130),
+        'title': (255, 255, 255),
+        'btn_text': (48, 8, 22),
+    },
+    {   # 4 — Midnight Purple & Lavender (spiritual)
+        'bg1': (22, 8, 55),   'bg2': (45, 18, 95),
+        'plate': (248, 245, 255),
+        'accent': (185, 160, 245),
+        'title': (255, 255, 255),
+        'btn_text': (22, 8, 55),
+    },
+    {   # 5 — Charcoal & Amber (bold, modern)
+        'bg1': (18, 16, 14),  'bg2': (42, 38, 32),
+        'plate': (252, 250, 245),
+        'accent': (255, 185, 55),
+        'title': (255, 255, 255),
+        'btn_text': (18, 16, 14),
+    },
+]
 _FONTS = {
     'bold':     'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf',
     'regular':  'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Regular.ttf',
@@ -283,12 +321,15 @@ def _ensure_fonts():
 def create_poster(title, price_str, image_url, post_content):
     from PIL import Image, ImageDraw, ImageFont
 
+    theme = THEMES[hash(title) % len(THEMES)]
+    BG1   = theme['bg1']
+    BG2   = theme['bg2']
+    GOLD  = theme['accent']
+    WHITE = theme['title']
+    PLATE = theme['plate']
+    BTNFG = theme['btn_text']
+
     W, H = 1080, 1080
-    BG1   = (12,  8, 35)
-    BG2   = (28, 18, 65)
-    GOLD  = (212, 175, 55)
-    WHITE = (255, 255, 255)
-    SOFT  = (210, 205, 235)
 
     canvas = Image.new('RGB', (W, H), BG1)
     draw   = ImageDraw.Draw(canvas)
@@ -315,7 +356,7 @@ def create_poster(title, price_str, image_url, post_content):
             raw = bg_white
             raw.thumbnail((IMG_W, IMG_H), Image.LANCZOS)
             pw, ph = raw.size
-            plate = Image.new('RGB', (IMG_W, IMG_H), (248, 246, 255))
+            plate = Image.new('RGB', (IMG_W, IMG_H), PLATE)
             plate.paste(raw, ((IMG_W - pw) // 2, (IMG_H - ph) // 2))
             canvas.paste(plate, (PAD, PAD))
         except Exception as e:
@@ -377,7 +418,7 @@ def create_poster(title, price_str, image_url, post_content):
     cta_x = (W - cta_w) // 2
     cta_y = y
     draw.rounded_rectangle([cta_x, cta_y, cta_x + cta_w, cta_y + cta_h], radius=29, fill=GOLD)
-    draw.text((W // 2, cta_y + cta_h // 2), cta_text, font=f_cta, fill=(12, 8, 35), anchor='mm')
+    draw.text((W // 2, cta_y + cta_h // 2), cta_text, font=f_cta, fill=BTNFG, anchor='mm')
 
     # URL footer
     draw.text((W // 2, H - 32), 'girnardarshan-com.myshopify.com', font=f_url, fill=GOLD, anchor='mb')
