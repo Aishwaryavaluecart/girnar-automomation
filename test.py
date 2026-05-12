@@ -4,9 +4,12 @@ sys.stdout.reconfigure(encoding='utf-8')
 import os
 import re
 import json
-import uuid
+import hmac
+import hashlib
+import base64
 import time
 import requests
+
 from dotenv import load_dotenv
 from google import genai
 
@@ -15,8 +18,14 @@ load_dotenv()
 STORE         = 'girnardarshan-com.myshopify.com'
 PRODUCT_TITLE = 'Neminath Bhagwan LED Photo Frame | 12×17 Inch | Silver Border'
 SERVER_URL    = os.getenv('SERVER_URL', 'http://localhost:3000')
+_TOKEN_SECRET = os.getenv('REGISTER_SECRET', 'girnar2026')
 
 gemini = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
+
+def create_signed_token(data):
+    payload = base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip('=')
+    sig = hmac.new(_TOKEN_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
 
 def fetch_product():
     res = requests.get(
@@ -252,8 +261,7 @@ def main():
     post_content = generate_facebook_post(product)
     print(f'\n--- Generated Post ---\n{post_content}\n----------------------\n')
 
-    # 3. Register token with Railway server
-    token = str(uuid.uuid4())
+    # 3. Create signed token locally — no server storage needed
     entry = {
         'product': {
             'title':  product['title'],
@@ -262,17 +270,9 @@ def main():
         },
         'post_content': post_content,
         'image_url':    image_url,
-        'created_at':   time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
         'expires_at':   time.time() + 48 * 3600,
-        'used':         False,
     }
-    reg = requests.post(
-        f"{SERVER_URL}/register-token",
-        json={'token': token, 'entry': entry},
-        headers={'X-Register-Secret': 'girnar2026'},
-    )
-    if reg.status_code != 200:
-        raise Exception(f"Failed to register token with server: {reg.status_code} {reg.text[:200]}")
+    token = create_signed_token(entry)
 
     # 4. Send email — use Railway poster URL so boss sees the actual poster
     poster_url = f"{SERVER_URL}/poster/{token}"

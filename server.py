@@ -19,26 +19,29 @@ from google import genai
 load_dotenv()
 
 app = Flask(__name__)
-PENDING_FILE = '/data/pending.json' if os.path.isdir('/data') else 'pending.json'
-STORE = 'girnardarshan-com.myshopify.com'
+STORE      = 'girnardarshan-com.myshopify.com'
 SERVER_URL = os.getenv('SERVER_URL', 'http://localhost:3000')
+_TOKEN_SECRET = os.getenv('REGISTER_SECRET', 'girnar2026')
 
 gemini = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
 
-# --- Storage ---
+# --- Signed token (no server-side storage needed) ---
 
-def get_pending():
-    if not os.path.exists(PENDING_FILE):
-        return {}
+def create_signed_token(data):
+    payload = base64.urlsafe_b64encode(json.dumps(data).encode()).decode().rstrip('=')
+    sig = hmac.new(_TOKEN_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+def decode_signed_token(token_str):
     try:
-        with open(PENDING_FILE) as f:
-            return json.load(f)
+        payload, sig = token_str.rsplit('.', 1)
+        expected = hmac.new(_TOKEN_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected, sig):
+            return None
+        padding = 4 - len(payload) % 4
+        return json.loads(base64.urlsafe_b64decode(payload + '=' * padding).decode())
     except Exception:
-        return {}
-
-def save_pending(data):
-    with open(PENDING_FILE, 'w') as f:
-        json.dump(data, f, indent=2)
+        return None
 
 # --- Shopify HMAC ---
 
@@ -467,9 +470,7 @@ def run_pipeline(product):
         post_content = generate_facebook_post(product)
         print('🤖 Post generated')
 
-        token = str(uuid.uuid4())
-        pending = get_pending()
-        pending[token] = {
+        entry = {
             'product': {
                 'title':  product['title'],
                 'handle': product.get('handle', ''),
@@ -477,11 +478,9 @@ def run_pipeline(product):
             },
             'post_content': post_content,
             'image_url':    image_url,
-            'created_at':   time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
             'expires_at':   time.time() + 48 * 3600,
-            'used':         False,
         }
-        save_pending(pending)
+        token = create_signed_token(entry)
 
         send_approval_email(product, post_content, token, image_url)
         print('📧 Approval email sent to aishwarya@valuecart.in')
@@ -536,10 +535,9 @@ def already_used_page(name):
 def health():
     return {'status': 'ok', 'service': 'Girnar Darshan Automation'}
 
-@app.route('/poster/<token>')
+@app.route('/poster/<path:token>')
 def serve_poster(token):
-    pending = get_pending()
-    entry   = pending.get(token)
+    entry = decode_signed_token(token)
     if not entry:
         return 'Not found', 404
     try:
@@ -550,19 +548,6 @@ def serve_poster(token):
         return Response(img_bytes, mimetype='image/jpeg')
     except Exception as e:
         return str(e), 500
-
-@app.route('/register-token', methods=['POST'])
-def register_token():
-    secret = request.headers.get('X-Register-Secret', '')
-    if secret != os.getenv('REGISTER_SECRET', 'girnar2026'):
-        return 'Unauthorized', 401
-    data = request.get_json()
-    if not data or 'token' not in data:
-        return 'Bad Request', 400
-    pending = get_pending()
-    pending[data['token']] = data['entry']
-    save_pending(pending)
-    return {'ok': True}, 200
 
 @app.route('/webhook/shopify', methods=['POST'])
 def shopify_webhook():
@@ -580,34 +565,31 @@ def shopify_webhook():
     threading.Thread(target=run_pipeline, args=(product,), daemon=True).start()
     return 'OK', 200
 
+def _do_post(entry):
+    p         = entry['product']
+    price_str = f"₹{p['price']}" if p.get('price') else ''
+    poster    = create_poster(p['title'], price_str, entry.get('image_url'), entry['post_content'])
+    post_to_facebook(entry['post_content'], entry.get('image_url'), poster_bytes=poster)
+    print(f"🚀 Posted to Facebook: {p['title']}")
+
 @app.route('/approve-amp', methods=['OPTIONS', 'POST'])
 def approve_amp():
     headers = amp_cors_headers()
-
     if request.method == 'OPTIONS':
         return ('', 204, headers)
 
-    token = request.form.get('token') or request.json.get('token') if request.is_json else request.form.get('token')
+    token = request.form.get('token') if not request.is_json else request.json.get('token')
     if not token:
         return jsonify({'message': 'No token provided.'}), 400, headers
 
-    pending = get_pending()
-    entry   = pending.get(token)
-
+    entry = decode_signed_token(token)
     if not entry:
         return jsonify({'message': 'Invalid or expired approval link.'}), 404, headers
     if time.time() > entry['expires_at']:
         return jsonify({'message': 'This approval link has expired (48 hours).'}), 410, headers
 
     try:
-        p = entry['product']
-        price_str = f"₹{p['price']}" if p.get('price') else ''
-        poster = create_poster(p['title'], price_str, entry.get('image_url'), entry['post_content'])
-        post_to_facebook(entry['post_content'], entry.get('image_url'), poster_bytes=poster)
-        pending[token]['used']      = True
-        pending[token]['posted_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-        save_pending(pending)
-        print(f"🚀 Posted to Facebook: {entry['product']['title']}")
+        _do_post(entry)
         return jsonify({'message': f"{entry['product']['title']} is now live on your Facebook page!"}), 200, headers
     except Exception as e:
         print(f'Facebook error: {e}')
@@ -619,23 +601,14 @@ def approve():
     if not token:
         return error_page('No approval token provided.'), 400
 
-    pending = get_pending()
-    entry   = pending.get(token)
-
+    entry = decode_signed_token(token)
     if not entry:
         return error_page('Invalid or expired approval link.'), 404
     if time.time() > entry['expires_at']:
         return error_page('This approval link has expired (48 hours).'), 410
 
     try:
-        p = entry['product']
-        price_str = f"₹{p['price']}" if p.get('price') else ''
-        poster = create_poster(p['title'], price_str, entry.get('image_url'), entry['post_content'])
-        post_to_facebook(entry['post_content'], entry.get('image_url'), poster_bytes=poster)
-        pending[token]['used']      = True
-        pending[token]['posted_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-        save_pending(pending)
-        print(f"🚀 Posted to Facebook: {entry['product']['title']}")
+        _do_post(entry)
         return success_page(entry['product']['title'])
     except Exception as e:
         print(f'Facebook error: {e}')
