@@ -2,6 +2,7 @@ import sys
 sys.stdout.reconfigure(encoding='utf-8')
 
 import os
+import io
 import re
 import json
 import hmac
@@ -254,14 +255,154 @@ def send_approval_email(product, post_content, token, image_url):
     if res.status_code not in (200, 202):
         raise Exception(f"SendGrid error {res.status_code}: {res.text[:200]}")
 
+# --- Poster ---
+
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+_FONTS = {
+    'bold':     'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Bold.ttf',
+    'regular':  'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-Regular.ttf',
+    'semibold': 'https://raw.githubusercontent.com/google/fonts/main/ofl/poppins/Poppins-SemiBold.ttf',
+}
+
+def _ensure_fonts():
+    os.makedirs(FONT_DIR, exist_ok=True)
+    paths = {}
+    for key, url in _FONTS.items():
+        path = os.path.join(FONT_DIR, f'Poppins-{key.capitalize()}.ttf')
+        if not os.path.exists(path):
+            try:
+                r = requests.get(url, timeout=15)
+                with open(path, 'wb') as f:
+                    f.write(r.content)
+            except Exception as e:
+                print(f'Font download failed ({key}): {e}')
+                path = None
+        paths[key] = path if os.path.exists(path or '') else None
+    return paths
+
+def create_poster(title, price_str, image_url, post_content):
+    from PIL import Image, ImageDraw, ImageFont
+
+    W, H = 1080, 1080
+    BG1   = (12,  8, 35)
+    BG2   = (28, 18, 65)
+    GOLD  = (212, 175, 55)
+    WHITE = (255, 255, 255)
+    SOFT  = (210, 205, 235)
+
+    canvas = Image.new('RGB', (W, H), BG1)
+    draw   = ImageDraw.Draw(canvas)
+    for y in range(H):
+        t = y / H
+        r = int(BG1[0] + (BG2[0] - BG1[0]) * t)
+        g = int(BG1[1] + (BG2[1] - BG1[1]) * t)
+        b = int(BG1[2] + (BG2[2] - BG1[2]) * t)
+        draw.line([(0, y), (W, y)], fill=(r, g, b))
+
+    PAD    = 48
+    IMG_H  = 560
+    IMG_W  = W - PAD * 2
+
+    if image_url:
+        try:
+            resp     = requests.get(image_url, timeout=10)
+            raw      = Image.open(io.BytesIO(resp.content)).convert('RGBA')
+            bg_white = Image.new('RGB', raw.size, WHITE)
+            if raw.mode == 'RGBA':
+                bg_white.paste(raw, mask=raw.split()[3])
+            else:
+                bg_white.paste(raw)
+            raw = bg_white
+            raw.thumbnail((IMG_W, IMG_H), Image.LANCZOS)
+            pw, ph = raw.size
+            plate = Image.new('RGB', (IMG_W, IMG_H), (248, 246, 255))
+            plate.paste(raw, ((IMG_W - pw) // 2, (IMG_H - ph) // 2))
+            canvas.paste(plate, (PAD, PAD))
+        except Exception as e:
+            print(f'Poster image error: {e}')
+
+    line_y = PAD + IMG_H + 16
+    draw.line([(PAD, line_y), (W - PAD, line_y)], fill=GOLD, width=2)
+
+    font_paths = _ensure_fonts()
+
+    def fnt(key, size):
+        p = font_paths.get(key)
+        if p:
+            try:
+                return ImageFont.truetype(p, size)
+            except Exception:
+                pass
+        return ImageFont.load_default()
+
+    f_brand   = fnt('bold',     26)
+    f_title   = fnt('bold',     50)
+    f_price   = fnt('bold',     44)
+    f_benefit = fnt('regular',  28)
+    f_url     = fnt('semibold', 22)
+
+    y = line_y + 20
+
+    # Brand line
+    draw.text((W // 2, y), 'GIRNAR DARSHAN', font=f_brand, fill=GOLD, anchor='mt')
+    y += 40
+
+    # Title — wrap to 2 lines
+    words, cur, title_lines = title.split(), '', []
+    for word in words:
+        test = (cur + ' ' + word).strip()
+        if draw.textlength(test, font=f_title) > W - PAD * 2.5:
+            if cur:
+                title_lines.append(cur)
+            cur = word
+        else:
+            cur = test
+    if cur:
+        title_lines.append(cur)
+    for line in title_lines[:2]:
+        draw.text((W // 2, y), line, font=f_title, fill=WHITE, anchor='mt')
+        y += 62
+
+    y += 4
+
+    # Price
+    if price_str:
+        draw.text((W // 2, y), price_str, font=f_price, fill=GOLD, anchor='mt')
+        y += 58
+
+    # 2 benefit lines from AI post (skip first hook line)
+    benefits = [l.strip() for l in post_content.split('\n')
+                if l.strip() and not l.strip().startswith('#')
+                and not l.strip().startswith('http') and len(l.strip()) > 15]
+    for bl in benefits[1:3]:
+        while draw.textlength('• ' + bl, font=f_benefit) > W - PAD * 2.5 and len(bl) > 3:
+            bl = bl[:-1]
+        if bl != bl:
+            bl += '…'
+        draw.text((W // 2, y), '• ' + bl, font=f_benefit, fill=SOFT, anchor='mt')
+        y += 42
+
+    # URL footer
+    draw.text((W // 2, H - 32), 'www.girnardarshan.com', font=f_url, fill=GOLD, anchor='mb')
+
+    buf = io.BytesIO()
+    canvas.save(buf, format='JPEG', quality=93)
+    return buf.getvalue()
+
 # --- Facebook ---
 
-def post_to_facebook(post_content, image_url):
+def post_to_facebook(post_content, image_url, poster_bytes=None):
     page_id = os.getenv('FACEBOOK_PAGE_ID')
     token   = os.getenv('FACEBOOK_API_KEY')
     base    = 'https://graph.facebook.com/v19.0'
 
-    if image_url:
+    if poster_bytes:
+        res = requests.post(
+            f'{base}/{page_id}/photos',
+            data={'caption': post_content, 'access_token': token, 'published': 'true'},
+            files={'source': ('poster.jpg', poster_bytes, 'image/jpeg')},
+        )
+    elif image_url:
         res = requests.post(f'{base}/{page_id}/photos', json={
             'url': image_url, 'caption': post_content,
             'access_token': token, 'published': True,
@@ -408,7 +549,10 @@ def approve_amp():
         return jsonify({'message': 'This approval link has expired (48 hours).'}), 410, headers
 
     try:
-        post_to_facebook(entry['post_content'], entry.get('image_url'))
+        p = entry['product']
+        price_str = f"₹{p['price']}" if p.get('price') else ''
+        poster = create_poster(p['title'], price_str, entry.get('image_url'), entry['post_content'])
+        post_to_facebook(entry['post_content'], entry.get('image_url'), poster_bytes=poster)
         pending[token]['used']      = True
         pending[token]['posted_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         save_pending(pending)
@@ -435,7 +579,10 @@ def approve():
         return error_page('This approval link has expired (48 hours).'), 410
 
     try:
-        post_to_facebook(entry['post_content'], entry.get('image_url'))
+        p = entry['product']
+        price_str = f"₹{p['price']}" if p.get('price') else ''
+        poster = create_poster(p['title'], price_str, entry.get('image_url'), entry['post_content'])
+        post_to_facebook(entry['post_content'], entry.get('image_url'), poster_bytes=poster)
         pending[token]['used']      = True
         pending[token]['posted_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
         save_pending(pending)
