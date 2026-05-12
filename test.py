@@ -13,7 +13,7 @@ from google import genai
 load_dotenv()
 
 STORE         = 'girnardarshan-com.myshopify.com'
-PRODUCT_TITLE = 'Embroidered Girnar Kerchief | French Work Note | White & Gold'
+PRODUCT_TITLE = 'Neminath Bhagwan LED Photo Frame | 12×17 Inch | Silver Border'
 SERVER_URL    = os.getenv('SERVER_URL', 'http://localhost:3000')
 
 gemini = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
@@ -25,7 +25,7 @@ def fetch_product():
         headers={'X-Shopify-Access-Token': os.getenv('SHOPIFY_ACCESS_TOKEN')}
     )
     products = res.json().get('products', [])
-    product  = next((p for p in products if 'kerchief' in p['title'].lower()), None)
+    product  = next((p for p in products if 'neminath' in p['title'].lower() or 'led' in p['title'].lower()), None)
     if not product:
         raise Exception(f'Product not found: "{PRODUCT_TITLE}"')
     return product
