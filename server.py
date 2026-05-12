@@ -543,8 +543,6 @@ def approve_amp():
 
     if not entry:
         return jsonify({'message': 'Invalid or expired approval link.'}), 404, headers
-    if entry.get('used'):
-        return jsonify({'message': f"{entry['product']['title']} was already posted to Facebook."}), 200, headers
     if time.time() > entry['expires_at']:
         return jsonify({'message': 'This approval link has expired (48 hours).'}), 410, headers
 
@@ -573,8 +571,6 @@ def approve():
 
     if not entry:
         return error_page('Invalid or expired approval link.'), 404
-    if entry.get('used'):
-        return already_used_page(entry['product']['title'])
     if time.time() > entry['expires_at']:
         return error_page('This approval link has expired (48 hours).'), 410
 
