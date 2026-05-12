@@ -19,7 +19,7 @@ from google import genai
 load_dotenv()
 
 app = Flask(__name__)
-PENDING_FILE = 'pending.json'
+PENDING_FILE = '/data/pending.json' if os.path.isdir('/data') else 'pending.json'
 STORE = 'girnardarshan-com.myshopify.com'
 SERVER_URL = os.getenv('SERVER_URL', 'http://localhost:3000')
 
