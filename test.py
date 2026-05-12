@@ -274,9 +274,10 @@ def main():
     if reg.status_code != 200:
         raise Exception(f"Failed to register token with server: {reg.status_code} {reg.text[:200]}")
 
-    # 4. Send email
+    # 4. Send email — use Railway poster URL so boss sees the actual poster
+    poster_url = f"{SERVER_URL}/poster/{token}"
     print('📧 Sending AMP approval email to aishwarya@valuecart.in...')
-    send_approval_email(product, post_content, token, image_url)
+    send_approval_email(product, post_content, token, poster_url)
     print('   Email sent!\n')
 
     approve_url = f"{SERVER_URL}/approve?token={token}"

@@ -498,6 +498,21 @@ def already_used_page(name):
 def health():
     return {'status': 'ok', 'service': 'Girnar Darshan Automation'}
 
+@app.route('/poster/<token>')
+def serve_poster(token):
+    pending = get_pending()
+    entry   = pending.get(token)
+    if not entry:
+        return 'Not found', 404
+    try:
+        p         = entry['product']
+        price_str = f"₹{p['price']}" if p.get('price') else ''
+        img_bytes = create_poster(p['title'], price_str, entry.get('image_url'), entry['post_content'])
+        from flask import Response
+        return Response(img_bytes, mimetype='image/jpeg')
+    except Exception as e:
+        return str(e), 500
+
 @app.route('/register-token', methods=['POST'])
 def register_token():
     secret = request.headers.get('X-Register-Secret', '')
