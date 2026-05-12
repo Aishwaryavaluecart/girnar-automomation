@@ -43,7 +43,7 @@ Write an engaging Facebook post for this new product:
 Product: {product['title']}
 {f'Price: {price_str}' if price_str else ''}
 Description: {desc[:600]}
-Link: https://girnardarshan.com/products/{product.get('handle', '')}
+Link: https://girnardarshan-com.myshopify.com/products/{product.get('handle', '')}
 
 Requirements:
 - Start with a strong hook that grabs attention

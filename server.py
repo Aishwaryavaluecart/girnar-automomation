@@ -65,7 +65,7 @@ Write an engaging Facebook post for this new product:
 Product: {product['title']}
 {f'Price: {price_str}' if price_str else ''}
 Description: {desc[:600]}
-Link: https://girnardarshan.com/products/{product.get('handle', '')}
+Link: https://girnardarshan-com.myshopify.com/products/{product.get('handle', '')}
 
 Requirements:
 - Start with a strong hook that grabs attention
@@ -380,7 +380,7 @@ def create_poster(title, price_str, image_url, post_content):
     draw.text((W // 2, cta_y + cta_h // 2), cta_text, font=f_cta, fill=(12, 8, 35), anchor='mm')
 
     # URL footer
-    draw.text((W // 2, H - 32), 'www.girnardarshan.com', font=f_url, fill=GOLD, anchor='mb')
+    draw.text((W // 2, H - 32), 'girnardarshan-com.myshopify.com', font=f_url, fill=GOLD, anchor='mb')
 
     buf = io.BytesIO()
     canvas.save(buf, format='JPEG', quality=93)
